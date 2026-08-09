@@ -11,7 +11,9 @@
      from Cloudflare Pages environment variables.
      ============================================================ -->
 <script>
-  const GCC_CONFIG = {
+  /* window.* on purpose: a top-level `const` here lives in script scope and is
+     NOT visible as window.GCC_CONFIG to the second <script> block below. */
+  window.GCC_CONFIG = {
     CLIENT_ID: "__GCC_CLIENT_ID__",
     ENDPOINT:  "__GCC_ENDPOINT__",
     DOMAIN:    "__GCC_DOMAIN__",
