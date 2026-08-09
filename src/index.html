@@ -236,7 +236,13 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
   .hero-mark{width:150px;right:-30px;opacity:.15}
   .gate .gate-mark{width:118px}
   .masthead img{height:46px}
-  .who .meta span{white-space:normal;overflow:visible}
+  /* University emails (24sc06037@gsfcuniversity.ac.in) contain no spaces, so
+     white-space:normal gives them nothing to wrap at — with overflow visible
+     they spilled sideways and painted over the transparent Switch account
+     button. Give them an explicit break opportunity and drop the button onto
+     its own full-width row so the two can't collide at all. */
+  .who .meta span{white-space:normal;overflow:visible;overflow-wrap:anywhere}
+  .who button{flex:1 0 100%}
 }
 </style>
 </head>
@@ -328,15 +334,24 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
         <div class="err">Choose your school.</div>
       </div>
 
-      <div class="q" data-key="Stream" data-type="radio">
-        <span class="qlabel">Stream</span>
+      <div class="q" data-key="Stream" data-type="radio" data-required="1">
+        <span class="qlabel">Stream <span class="req">*</span></span>
         <div class="opts inline" data-name="Stream">
           <label class="opt"><input type="radio" name="Stream" value="B.Sc."><span class="otitle">B.Sc.</span></label>
           <label class="opt"><input type="radio" name="Stream" value="B.Tech."><span class="otitle">B.Tech.</span></label>
           <label class="opt"><input type="radio" name="Stream" value="M.Sc."><span class="otitle">M.Sc.</span></label>
           <label class="opt"><input type="radio" name="Stream" value="Management"><span class="otitle">Management</span></label>
         </div>
-        <button type="button" class="clear-sel" data-clears="Stream">Clear selection</button>
+        <div class="err">Choose your stream.</div>
+      </div>
+
+      <!-- Options are rendered by JS from COURSES, filtered to the chosen
+           stream. Kept out of the markup so a hidden option can never end up
+           checked and submitted. -->
+      <div class="q hidden" id="courseQ" data-key="Course" data-type="radio" data-required="1">
+        <span class="qlabel">Course <span class="req">*</span></span>
+        <div class="opts inline" data-name="Course" id="courseOpts"></div>
+        <div class="err">Choose your course.</div>
       </div>
 
       <div class="q" data-key="Semester" data-type="radio" data-required="1">
@@ -361,6 +376,8 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
             <span><span class="otitle">Marketing</span><span class="odesc">Digital marketing &amp; campaign strategy, on-campus and online marketing — posters, stalls, flash promos.</span></span></label>
           <label class="opt"><input type="radio" name="Committee" value="Social Media & Content Creation">
             <span><span class="otitle">Social Media &amp; Content Creation</span><span class="odesc">Short-form video editing, photo editing, content and caption writing, page management &amp; growth analytics, on-camera hosting.</span></span></label>
+          <label class="opt"><input type="radio" name="Committee" value="Research">
+            <span><span class="otitle">Research</span><span class="odesc">Global trends &amp; country research, background briefs on speakers and partner organisations, data collection &amp; analysis, survey design, report and documentation writing.</span></span></label>
         </div>
         <div class="err">Pick the committee you want to join.</div>
       </div>
@@ -507,6 +524,39 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
     e.target.closest('.q').classList.remove('bad');
   });
 
+  /* ---------- Course, filtered by Stream ---------- */
+  var COURSES = {
+    "B.Sc.":      ["Data Science","Biotechnology","Microbiology","Pharma","Chemistry"],
+    "B.Tech.":    ["Computer Science and Engineering","Chemical Engineering","FEHS",
+                   "Electronics and Communications Engineering"],
+    "M.Sc.":      ["Data Science","Biotechnology","Microbiology","Chemistry","Pharma"],
+    "Management": ["BBA","B.Com.","MBA"]
+  };
+
+  function renderCourses(stream){
+    var box = $('courseOpts'), q = $('courseQ');
+    box.textContent = '';                       // drops any previous selection with the nodes
+    var list = COURSES[stream];
+    if (!list) { q.classList.add('hidden'); return; }
+
+    list.forEach(function(course){
+      var label = document.createElement('label');
+      label.className = 'opt';
+      var input = document.createElement('input');
+      input.type = 'radio'; input.name = 'Course'; input.value = course;
+      var title = document.createElement('span');
+      title.className = 'otitle'; title.textContent = course;
+      label.appendChild(input); label.appendChild(title);
+      box.appendChild(label);
+    });
+    q.classList.remove('hidden');
+    q.classList.remove('bad');
+  }
+
+  document.querySelectorAll('input[name="Stream"]').forEach(function(input){
+    input.addEventListener('change', function(){ renderCourses(input.value); });
+  });
+
   document.querySelectorAll('.clear-sel').forEach(function(btn){
     btn.addEventListener('click', function(){
       var name = btn.getAttribute('data-clears');
@@ -541,8 +591,10 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
       if (!pair[1](el.value)) fail(el.closest('.q'));
     });
 
-    ['School','Semester','Committee','Commitment'].forEach(function(name){
-      if (!radioValue(name)) fail(document.querySelector('input[name="' + name + '"]').closest('.q'));
+    // Look the group up by its .opts wrapper, not by an input — Course has no
+    // inputs at all until a stream is picked.
+    ['School','Stream','Course','Semester','Committee','Commitment'].forEach(function(name){
+      if (!radioValue(name)) fail(document.querySelector('.opts[data-name="' + name + '"]').closest('.q'));
     });
 
     if (firstBad) {
@@ -574,6 +626,7 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
         "Enrollment number":$('enrollment').value.trim(),
         "School":           radioValue('School'),
         "Stream":           radioValue('Stream'),
+        "Course":           radioValue('Course'),
         "Semester":         radioValue('Semester'),
         "Which Comittee of Global Connect Club do you want to join ?": radioValue('Committee'),
         "Why do you want to join the Global Connect Club?": $('whyJoin').value.trim(),
