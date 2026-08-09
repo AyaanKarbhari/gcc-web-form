@@ -249,7 +249,10 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
      button. Give them an explicit break opportunity and drop the button onto
      its own full-width row so the two can't collide at all. */
   .who .meta span{white-space:normal;overflow:visible;overflow-wrap:anywhere}
-  .who button{flex:1 0 100%}
+  /* min-height, not padding: both of these measured under 40px on a phone,
+     below a comfortable tap target. */
+  .who button{flex:1 0 100%;min-height:44px}
+  .btn-ghost{min-height:44px;padding:0 4px}
 }
 </style>
 </head>
@@ -330,7 +333,8 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
 
       <div class="q" data-key="Enrollment number">
         <label class="qlabel" for="enrollment">Enrollment number <span class="req">*</span></label>
-        <input type="text" id="enrollment" name="Enrollment number" required>
+        <input type="text" id="enrollment" name="Enrollment number" required
+               autocapitalize="characters" autocomplete="off" spellcheck="false">
         <div class="err">Enter your enrollment number.</div>
       </div>
 
@@ -344,20 +348,15 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
         <div class="err">Choose your school.</div>
       </div>
 
-      <div class="q" data-key="Stream" data-type="radio" data-required="1">
+      <!-- School > Stream > Course cascade. Both option lists are rendered by
+           JS from STREAMS and COURSES rather than sitting in the markup, so an
+           option that doesn't apply can never end up checked and submitted. -->
+      <div class="q hidden" id="streamQ" data-key="Stream" data-type="radio" data-required="1">
         <span class="qlabel">Stream <span class="req">*</span></span>
-        <div class="opts inline" data-name="Stream">
-          <label class="opt"><input type="radio" name="Stream" value="B.Sc."><span class="otitle">B.Sc.</span></label>
-          <label class="opt"><input type="radio" name="Stream" value="B.Tech."><span class="otitle">B.Tech.</span></label>
-          <label class="opt"><input type="radio" name="Stream" value="M.Sc."><span class="otitle">M.Sc.</span></label>
-          <label class="opt"><input type="radio" name="Stream" value="Management"><span class="otitle">Management</span></label>
-        </div>
+        <div class="opts inline" data-name="Stream" id="streamOpts"></div>
         <div class="err">Choose your stream.</div>
       </div>
 
-      <!-- Options are rendered by JS from COURSES, filtered to the chosen
-           stream. Kept out of the markup so a hidden option can never end up
-           checked and submitted. -->
       <div class="q hidden" id="courseQ" data-key="Course" data-type="radio" data-required="1">
         <span class="qlabel">Course <span class="req">*</span></span>
         <div class="opts inline" data-name="Course" id="courseOpts"></div>
@@ -534,37 +533,61 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
     e.target.closest('.q').classList.remove('bad');
   });
 
-  /* ---------- Course, filtered by Stream ---------- */
+  /* ---------- School > Stream > Course ---------- */
+  var STREAMS = {
+    "SOT": ["B.Tech.","BCA"],
+    "SOS": ["B.Sc.","M.Sc."],
+    "SOM": ["Management"]
+  };
+  // BCA has no sub-courses, so it gets a one-entry list rather than a special
+  // case: a single option auto-selects, which keeps Course non-empty for every
+  // stream and leaves validation and the sheet schema unchanged.
   var COURSES = {
+    "B.Tech.":    ["CSE","ECE","FEHS","Chemical Eng."],
+    "BCA":        ["BCA"],
     "B.Sc.":      ["Data Science","Biotechnology","Microbiology","Pharma","Chemistry"],
-    "B.Tech.":    ["Computer Science and Engineering","Chemical Engineering","FEHS",
-                   "Electronics and Communications Engineering"],
     "M.Sc.":      ["Data Science","Biotechnology","Microbiology","Chemistry","Pharma"],
     "Management": ["BBA","B.Com.","MBA"]
   };
 
-  function renderCourses(stream){
-    var box = $('courseOpts'), q = $('courseQ');
+  function renderGroup(qId, boxId, name, list){
+    var q = $(qId), box = $(boxId);
     box.textContent = '';                       // drops any previous selection with the nodes
-    var list = COURSES[stream];
-    if (!list) { q.classList.add('hidden'); return; }
+    if (!list || !list.length) { q.classList.add('hidden'); return; }
 
-    list.forEach(function(course){
+    list.forEach(function(value){
       var label = document.createElement('label');
       label.className = 'opt';
       var input = document.createElement('input');
-      input.type = 'radio'; input.name = 'Course'; input.value = course;
+      input.type = 'radio'; input.name = name; input.value = value;
       var title = document.createElement('span');
-      title.className = 'otitle'; title.textContent = course;
+      title.className = 'otitle'; title.textContent = value;
       label.appendChild(input); label.appendChild(title);
       box.appendChild(label);
     });
     q.classList.remove('hidden');
     q.classList.remove('bad');
+
+    // Only one possibility — pick it, and let the change event cascade on.
+    if (list.length === 1) {
+      var only = box.querySelector('input');
+      only.checked = true;
+      only.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   }
 
-  document.querySelectorAll('input[name="Stream"]').forEach(function(input){
-    input.addEventListener('change', function(){ renderCourses(input.value); });
+  function renderStreams(school){
+    renderGroup('streamQ', 'streamOpts', 'Stream', STREAMS[school]);
+    if (!STREAMS[school]) renderCourses('');    // school cleared, drop Course too
+  }
+  function renderCourses(stream){
+    renderGroup('courseQ', 'courseOpts', 'Course', COURSES[stream]);
+  }
+
+  // Stream inputs are created at runtime, so listen on the way up.
+  document.addEventListener('change', function(e){
+    if (e.target.name === 'School') { renderCourses(''); renderStreams(e.target.value); }
+    else if (e.target.name === 'Stream') renderCourses(e.target.value);
   });
 
   document.querySelectorAll('.clear-sel').forEach(function(btn){
@@ -577,6 +600,17 @@ input[readonly]{background:#EFEAE0;opacity:.85;cursor:not-allowed}
 
   document.querySelectorAll('input,textarea').forEach(function(el){
     el.addEventListener('input', function(){ el.closest('.q').classList.remove('bad'); });
+  });
+
+  /* Enrollment numbers go in the sheet upper-cased. autocapitalize only hints
+     to the soft keyboard, so force it — and put the caret back, since
+     reassigning value sends it to the end. */
+  $('enrollment').addEventListener('input', function(){
+    var el = $('enrollment'), up = el.value.toUpperCase();
+    if (up === el.value) return;
+    var start = el.selectionStart, end = el.selectionEnd;
+    el.value = up;
+    try { el.setSelectionRange(start, end); } catch (ignore) {}
   });
 
   /* ---------- validation ---------- */

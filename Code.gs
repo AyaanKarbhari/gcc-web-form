@@ -22,7 +22,7 @@ function prop(key, fallback) {
 
 function setupProperties() {
   PropertiesService.getScriptProperties().setProperties({
-    CLIENT_ID:      'PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com',
+    CLIENT_ID:      '313217709661-blqnmn1f6bo4e2ta6t39k9glanjhersj.apps.googleusercontent.com',
     ALLOWED_DOMAIN: 'gsfcuniversity.ac.in',
     SHEET_NAME:     'Form Responses 1',
     ALLOW_EDITS:    'false',
